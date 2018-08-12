@@ -8,7 +8,6 @@
 
 import qualified Control.Foldl                as F
 import           Control.Lens
-import           Control.Monad.Random         (getRandomR, getRandomRs)
 import qualified Data.Attoparsec.Text         as A
 import           Data.Semigroup               ((<>))
 import           Data.Singletons.Prelude.List (Head, Last)
@@ -19,8 +18,9 @@ import           Options.Applicative
 import           Pipes
 import           Pipes.Group
 import qualified Pipes.Prelude                as P
-import qualified Pipes.Text                   as PT
-import qualified Pipes.Text.IO                as PT
+import qualified Pipes.Prelude.Text           as PT
+import           System.IO                    (BufferMode (..), hSetBuffering,
+                                               stdout)
 
 -- The defininition for our simple recurrent network.
 -- This file just trains a network to generate a repeating sequence
@@ -64,10 +64,17 @@ feedForward' =
 
 parseJet :: A.Parser [(S ('D1 TRNNIn), Maybe (S ('D1 1)))]
 parseJet = do
-  nB <- A.double <* A.many1 A.space
-  tracks <- A.many' . A.count 4 $ A.double <* A.many1 A.space
+  nB <- A.double
+  tracks <- A.many1 . A.count 4 $ A.char '\t' *> A.double
 
-  return $ (, Just (S1D $ SA.konst nB)) . S1D . SA.fromList <$> tracks
+  return $
+    appLast Nothing (Just . S1D $ SA.konst nB)
+    $ S1D . SA.fromList <$> tracks
+
+  where
+    -- appLast _ _ []     = []
+    appLast _ y [z]    = [(z, y)]
+    appLast x y (z:zs) = (z, x) : appLast x y zs
 
 
 -- can't export this....
@@ -105,17 +112,28 @@ runRecurrentP net inps = do
 main :: IO ()
 main = do
     FeedForwardOpts nex rate <- execParser (info (feedForward' <**> helper) idm)
+    hSetBuffering stdout LineBuffering
+
     putStrLn "Training network..."
+
+    let p =
+          PT.stdinLn
+          >-> P.map (A.parseOnly parseJet)
+          >-> P.concat
 
     (net :: TracksNet, inps :: TracksInput) <-
       F.impurely P.foldM (trainRecurrentF rate)
-      . over (chunksOf 1000) (\p -> liftIO (putStrLn "trained 1000 more") >> p)
-      $ concats (view PT.lines PT.stdin)
-        >-> P.map (A.maybeResult . A.parse parseJet)
-        >-> P.concat
-        >-> P.take nex
+      . over (chunksOf 1000) (maps $ \x -> liftIO (putStrLn "trained 1000 more") >> x)
+      $ p >-> P.take nex
 
     print net
+
+    runEffect $
+      p
+      >-> P.mapM (\x -> print x >> return x)
+      >-> P.map (fmap fst)
+      >-> runRecurrentP net inps
+      >-> P.print
 
     -- let results = generateRecurrent trained bestInput (c 1)
     --
