@@ -31,7 +31,7 @@ import           System.IO                    (BufferMode (..), hSetBuffering,
 type R = Recurrent
 type F = FeedForward
 type TRNNIn = 4
-type TRNNOut = 10
+type TRNNOut = 50
 type TFFNOut = 1
 type TRNN = R (LSTM TRNNIn TRNNOut)
 type TFFN = F (FullyConnected TRNNOut TFFNOut)
