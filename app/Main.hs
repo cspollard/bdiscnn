@@ -2,7 +2,6 @@
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections       #-}
 {-# LANGUAGE TypeFamilies        #-}
 {-# LANGUAGE TypeOperators       #-}
 
@@ -10,17 +9,19 @@ import qualified Control.Foldl                as F
 import           Control.Lens
 import qualified Data.Attoparsec.Text         as A
 import           Data.Semigroup               ((<>))
+import           Data.Serialize
 import           Data.Singletons.Prelude.List (Head, Last)
 import           Grenade
 import           Grenade.Recurrent
 import qualified Numeric.LinearAlgebra.Static as SA
 import           Options.Applicative
 import           Pipes
+import qualified Pipes.ByteString             as PBS
 import           Pipes.Group
 import qualified Pipes.Prelude                as P
 import qualified Pipes.Prelude.Text           as PT
-import           System.IO                    (BufferMode (..), hSetBuffering,
-                                               stdout)
+import           System.IO                    (BufferMode (..), IOMode (..),
+                                               hSetBuffering, stdout, withFile)
 
 -- The defininition for our simple recurrent network.
 -- This file just trains a network to generate a repeating sequence
@@ -125,6 +126,9 @@ main = do
       F.impurely P.foldM (trainRecurrentF rate)
       . over (chunksOf 1000) (maps $ \x -> liftIO (putStrLn "trained 1000 more") >> x)
       $ p >-> P.take nex
+
+    withFile "net.out" WriteMode $ \h ->
+      runEffect $ PBS.fromLazy (encodeLazy (net, inps)) >-> PBS.toHandle h
 
     putStrLn ""
 

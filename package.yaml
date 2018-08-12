@@ -41,6 +41,8 @@ executables:
     - foldl
     - optparse-applicative
     - pipes
+    - pipes-bytestring
+    - cereal
     - pipes-group
     - pipes-text
     - MonadRandom
