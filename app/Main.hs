@@ -65,7 +65,7 @@ feedForward' =
 parseJet :: A.Parser [(S ('D1 TRNNIn), Maybe (S ('D1 1)))]
 parseJet = do
   nB <- A.double <* A.many1 A.space
-  tracks <- A.many' . A.count 5 $ A.double <* A.many1 A.space
+  tracks <- A.many' . A.count 4 $ A.double <* A.many1 A.space
 
   return $ (, Just (S1D $ SA.konst nB)) . S1D . SA.fromList <$> tracks
 
