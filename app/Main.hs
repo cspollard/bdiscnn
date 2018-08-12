@@ -107,26 +107,13 @@ main = do
     FeedForwardOpts nex rate <- execParser (info (feedForward' <**> helper) idm)
     putStrLn "Training network..."
 
-    -- let p =
-    --       P.repeatM $ do
-    --         taking <- getRandomR (1, 10)
-    --         xs <- take (taking+1) . fmap c <$> getRandomRs (1, 5)
-    --         return $ ((,Nothing) <$> take taking xs) ++ [(xs !! taking, Just (product xs))]
-
     (net :: TracksNet, inps :: TracksInput) <-
       F.impurely P.foldM (trainRecurrentF rate)
+      . over (chunksOf 1000) (\p -> liftIO (putStrLn "trained 1000 more") >> p)
       $ concats (view PT.lines PT.stdin)
         >-> P.map (A.maybeResult . A.parse parseJet)
         >-> P.concat
         >-> P.take nex
-
-    -- runEffect $
-    --   p
-    --   >-> P.take 100
-    --   >-> P.map (fst <$>)
-    --   >-> P.tee (P.map product >-> P.print)
-    --   >-> runRecurrentP net inps
-    --   >-> P.print
 
     print net
 
