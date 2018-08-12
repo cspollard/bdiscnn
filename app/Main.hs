@@ -134,7 +134,3 @@ main = do
       >-> P.map (fmap fst)
       >-> runRecurrentP net inps
       >-> P.print
-
-    -- let results = generateRecurrent trained bestInput (c 1)
-    --
-    -- print . take 50 . drop 100 $ results
