@@ -126,11 +126,11 @@ main = do
       . over (chunksOf 1000) (maps $ \x -> liftIO (putStrLn "trained 1000 more") >> x)
       $ p >-> P.take nex
 
-    print net
+    putStrLn ""
 
     runEffect $
       p
-      >-> P.mapM (\x -> print x >> return x)
+      >-> P.mapM (\x -> print (snd $ last x) >> return x)
       >-> P.map (fmap fst)
       >-> runRecurrentP net inps
-      >-> P.print
+      >-> P.mapM_ (print . last)
