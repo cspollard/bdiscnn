@@ -10,6 +10,7 @@ import           Control.Lens
 import qualified Data.Attoparsec.Text         as A
 import           Data.Semigroup               ((<>))
 import           Data.Serialize
+import           Data.Maybe (fromMaybe)
 import           Data.Singletons.Prelude.List (Head, Last)
 import           Grenade
 import           Grenade.Recurrent
@@ -50,12 +51,13 @@ type TracksNet =
 type TracksInput = RecurrentInputs TracksNetShape
 
 
-data FeedForwardOpts = FeedForwardOpts Int LearningParameters
+data Opts = Opts Int (Maybe String) LearningParameters
 
-feedForward' :: Parser FeedForwardOpts
+feedForward' :: Parser Opts
 feedForward' =
-  FeedForwardOpts
+  Opts
     <$> option auto (long "examples" <> short 'e' <> value 40000)
+    <*> optional (strOption (long "input" <> short 'i'))
     <*> ( LearningParameters
           <$> option auto (long "train_rate" <> short 'r' <> value 0.01)
           <*> option auto (long "momentum" <> value 0.9)
@@ -90,9 +92,8 @@ parseJet = do
 --      m
 --      [(S (Head shapes), Maybe (S (Last shapes)))]
 --      (RecurrentNetwork layers shapes, RecurrentInputs layers)
-trainRecurrentF lps = F.FoldM step start done
+trainRecurrentF lps start = F.FoldM step start done
   where
-    start = randomRecurrent
     step (!rnet, !rins) samp =
       return $ trainRecurrent lps rnet rins samp
     done = return
@@ -112,8 +113,9 @@ runRecurrentP net inps = do
 
 main :: IO ()
 main = do
-    FeedForwardOpts nex rate <- execParser (info (feedForward' <**> helper) idm)
+    Opts nex maybeIn rate <- execParser (info (feedForward' <**> helper) idm)
     hSetBuffering stdout LineBuffering
+    let start = maybe randomRecurrent return maybeIn
 
     putStrLn "Training network..."
 
@@ -123,7 +125,7 @@ main = do
           >-> P.concat
 
     (net :: TracksNet, inps :: TracksInput) <-
-      F.impurely P.foldM (trainRecurrentF rate)
+      F.impurely P.foldM (trainRecurrentF rate start)
       . over (chunksOf 1000) (maps $ \x -> liftIO (putStrLn "trained 1000 more") >> x)
       $ p >-> P.take nex
 
