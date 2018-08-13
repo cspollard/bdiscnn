@@ -45,6 +45,7 @@ executables:
     - cereal
     - pipes-group
     - pipes-text
+    - bytestring
     - MonadRandom
     - hmatrix
     - singletons

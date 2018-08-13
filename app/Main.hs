@@ -8,9 +8,10 @@
 import qualified Control.Foldl                as F
 import           Control.Lens
 import qualified Data.Attoparsec.Text         as A
+import qualified Data.ByteString.Lazy         as BS
 import           Data.Semigroup               ((<>))
 import           Data.Serialize
-import           Data.Maybe (fromMaybe)
+import           Data.Singletons              (SingI)
 import           Data.Singletons.Prelude.List (Head, Last)
 import           Grenade
 import           Grenade.Recurrent
@@ -75,23 +76,20 @@ parseJet = do
     $ S1D . SA.fromList <$> tracks
 
   where
-    -- appLast _ _ []     = []
+    appLast _ _ []     = []
     appLast _ y [z]    = [(z, y)]
     appLast x y (z:zs) = (z, x) : appLast x y zs
 
 
 -- can't export this....
--- trainRecurrentF
---   :: ( MonadRandom m
---      , Grenade.Recurrent.Core.Network.CreatableRecurrent layers shapes
---      , Num (RecurrentInputs layers)
---      , Data.Singletons.SingI (Last shapes)
---      )
---   => LearningParameters
---   -> F.FoldM
---      m
---      [(S (Head shapes), Maybe (S (Last shapes)))]
---      (RecurrentNetwork layers shapes, RecurrentInputs layers)
+trainRecurrentF
+  :: (Num (RecurrentInputs layers), SingI (Last shapes), Monad m)
+  => LearningParameters
+  -> m (RecurrentNetwork layers shapes, RecurrentInputs layers)
+  -> F.FoldM
+     m
+     [(S (Head shapes), Maybe (S (Last shapes)))]
+     (RecurrentNetwork layers shapes, RecurrentInputs layers)
 trainRecurrentF lps start = F.FoldM step start done
   where
     step (!rnet, !rins) samp =
@@ -115,7 +113,15 @@ main :: IO ()
 main = do
     Opts nex maybeIn rate <- execParser (info (feedForward' <**> helper) idm)
     hSetBuffering stdout LineBuffering
-    let start = maybe randomRecurrent return maybeIn
+    start <-
+      case maybeIn of
+        Nothing -> randomRecurrent
+        Just s ->
+          withFile s ReadMode $ \h -> do
+            res <- decodeLazy <$> BS.hGetContents h
+            case res of
+              Left err -> error err
+              Right x  -> return x
 
     putStrLn "Training network..."
 
@@ -125,7 +131,7 @@ main = do
           >-> P.concat
 
     (net :: TracksNet, inps :: TracksInput) <-
-      F.impurely P.foldM (trainRecurrentF rate start)
+      F.impurely P.foldM (trainRecurrentF rate $ return start)
       . over (chunksOf 1000) (maps $ \x -> liftIO (putStrLn "trained 1000 more") >> x)
       $ p >-> P.take nex
 
