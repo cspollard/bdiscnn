@@ -9,10 +9,13 @@ import qualified Control.Foldl                as F
 import           Control.Lens
 import qualified Data.Attoparsec.Text         as A
 import qualified Data.ByteString.Lazy         as BS
+import           Data.Maybe                   (fromJust)
 import           Data.Semigroup               ((<>))
 import           Data.Serialize
 import           Data.Singletons              (SingI)
 import           Data.Singletons.Prelude.List (Head, Last)
+import           GHC.Exts
+import           GHC.TypeLits
 import           Grenade
 import           Grenade.Recurrent
 import qualified Numeric.LinearAlgebra.Static as SA
@@ -142,7 +145,16 @@ main = do
 
     runEffect $
       p
-      >-> P.mapM (\x -> print (snd $ last x) >> return x)
+      >-> P.mapM (
+        \x -> do
+          putStr . show . fromS1D . fromJust . snd $ last x
+          putStr ", "
+          return x
+        )
       >-> P.map (fmap fst)
       >-> runRecurrentP net inps
-      >-> P.mapM_ (print . last)
+      >-> P.mapM_ (print . fromS1D . last)
+
+  where
+    fromS1D :: KnownNat n => S ('D1 n) -> Double
+    fromS1D (S1D r) = head . toList $ SA.unwrap r
